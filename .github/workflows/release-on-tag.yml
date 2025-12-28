@@ -16,14 +16,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create Release
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt
+          profile: minimal
+          override: true
+
+      - name: Build release binaries
+        run: |
+          cargo build --release --bins
+
+      - name: Package artifacts
+        run: |
+          mkdir -p artifacts
+          for bin in dtEEMCG dtproton; do
+            if [ -f target/release/$bin ]; then
+              echo "Packaging $bin"
+              tar -czf artifacts/${bin}-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz -C target/release $bin
+              zip -j artifacts/${bin}-${{ github.ref_name }}-x86_64-unknown-linux-gnu.zip target/release/$bin
+            fi
+          done
+
+      - name: Create Release and upload artifacts
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Assets (if any)
-        if: steps.create_release.outputs.upload_url != ''
-        run: |
-          echo "No assets to upload"
