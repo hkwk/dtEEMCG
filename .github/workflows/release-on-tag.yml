@@ -24,11 +24,20 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Build release binaries
+      - name: Build release binaries (capture logs)
+        continue-on-error: true
         run: |
-          cargo build --release --bins
+          mkdir -p build_logs
+          bash -lc "set -o pipefail; cargo build --release --bins 2>&1 | tee build_logs/build.log; exit ${PIPESTATUS[0]}"
+
+      - name: Upload build log
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-log-${{ github.ref_name }}
+          path: build_logs/build.log
 
       - name: Package artifacts
+        if: success() && always()
         run: |
           mkdir -p artifacts
           for bin in dtEEMCG dtproton; do
