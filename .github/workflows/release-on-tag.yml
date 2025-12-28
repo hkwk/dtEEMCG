@@ -6,13 +6,12 @@ on:
       - 'v*'
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-      id-token: write
-
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -24,29 +23,78 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Build release binaries (capture logs)
-        continue-on-error: true
+      - name: Build (capture logs)
+        shell: bash
+        if: runner.os != 'Windows'
         run: |
-          mkdir -p build_logs
-          bash -lc "set -o pipefail; cargo build --release --bins 2>&1 | tee build_logs/build.log; exit ${PIPESTATUS[0]}"
+          mkdir -p build_logs artifacts
+          set -o pipefail
+          cargo build --release --bins 2>&1 | tee build_logs/build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Build (capture logs) - Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path build_logs -Force | Out-Null
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          cargo build --release --bins 2>&1 | Tee-Object build_logs\build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload build log
         uses: actions/upload-artifact@v3
         with:
-          name: build-log-${{ github.ref_name }}
+          name: build-log-${{ matrix.os }}
           path: build_logs/build.log
 
-      - name: Package artifacts
-        if: success() && always()
+      - name: Package artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           mkdir -p artifacts
           for bin in dtEEMCG dtproton; do
             if [ -f target/release/$bin ]; then
               echo "Packaging $bin"
-              tar -czf artifacts/${bin}-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz -C target/release $bin
-              zip -j artifacts/${bin}-${{ github.ref_name }}-x86_64-unknown-linux-gnu.zip target/release/$bin
+              tar -czf artifacts/${bin}-${{ github.ref_name }}-${{ matrix.os }}.tar.gz -C target/release $bin
+              zip -j artifacts/${bin}-${{ github.ref_name }}-${{ matrix.os }}.zip target/release/$bin
             fi
           done
+
+      - name: Package artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          mkdir artifacts -ErrorAction SilentlyContinue
+          $bins = @('dtEEMCG','dtproton')
+          foreach ($bin in $bins) {
+            $exe = Join-Path -Path "target\release" -ChildPath "${bin}.exe"
+            if (Test-Path $exe) {
+              Write-Output "Packaging $bin"
+              Compress-Archive -Path $exe -DestinationPath "artifacts\${bin}-${{ github.ref_name }}-windows.zip" -Force
+            }
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts-${{ matrix.os }}
+          path: artifacts
+
+  publish:
+    name: Create release and attach artifacts
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: collected-artifacts
+
+      - name: List collected artifacts
+        run: |
+          ls -la collected-artifacts || true
 
       - name: Create Release and upload artifacts
         id: create_release
@@ -54,7 +102,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            artifacts/*.tar.gz
-            artifacts/*.zip
+            collected-artifacts/**/*.tar.gz
+            collected-artifacts/**/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
