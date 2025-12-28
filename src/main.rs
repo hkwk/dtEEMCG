@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
-use calamine::{open_workbook_auto, Data, Reader};
+use anyhow::{Context, Result, anyhow};
+use calamine::{Data, Reader, open_workbook_auto};
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -62,8 +62,6 @@ fn find_target_cells(
     if height == 0 || width == 0 {
         return Ok((height, 0, HashMap::new()));
     }
-
-    // 尽量模拟 Go 版本：
     // maxRow = len(GetRows(activeSheet))（通常到最后一个非空行）
     // maxColumn = max(len(row))（每一行的最后一个非空单元格列号）
     let mut max_column = 0usize;
@@ -158,10 +156,7 @@ fn process_excel(file_path: &Path) -> Result<()> {
     let mut book = umya_spreadsheet::reader::xlsx::read(file_path)
         .with_context(|| format!("无法打开文件(写入模式): {}", file_path.display()))?;
 
-    let active_sheet_name_original = book
-        .get_active_sheet()
-        .get_name()
-        .to_string();
+    let active_sheet_name_original = book.get_active_sheet().get_name().to_string();
 
     // 重命名工作表（与 Go 版本一致）
     if let Some(sheet) = book.get_sheet_by_name_mut("甲烷非甲烷分析仪") {
@@ -237,5 +232,75 @@ fn main() {
     let file_path = Path::new(&args[1]);
     if let Err(err) = process_excel(file_path) {
         eprintln!("处理Excel文件时出错: {err:#}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_process_excel_end_to_end() -> Result<()> {
+        // create temp dir and make it current so processed_ files are created there
+        let dir = tempdir()?;
+        let cwd = std::env::current_dir()?;
+        std::env::set_current_dir(dir.path())?;
+
+        // build input workbook
+        let mut book = umya_spreadsheet::new_file();
+        let sheet = book.get_active_sheet_mut();
+        sheet.get_cell_mut("A1").set_value("header");
+        // give it the name that gets replaced by the program
+        sheet.set_name("甲烷非甲烷分析仪".to_string());
+
+        // row 3 markers
+        sheet.get_cell_mut("I3").set_value("a24514");
+        sheet.get_cell_mut("K3").set_value("a24011");
+        sheet.get_cell_mut("Q3").set_value("a24510");
+        sheet.get_cell_mut("AY3").set_value("a25014");
+
+        // -999 values to be replaced in row4
+        sheet.get_cell_mut("I4").set_value("-999");
+        sheet.get_cell_mut("K4").set_value("-999");
+        sheet.get_cell_mut("Q4").set_value("-999");
+        sheet.get_cell_mut("AY4").set_value("-999");
+
+        // parentheses to remove from row >=3
+        sheet.get_cell_mut("A3").set_value("foo(bar)");
+        // total hydrocarbon replacement
+        sheet.get_cell_mut("B2").set_value("总烃(ppbv)");
+
+        let input_path = dir.path().join("input.xlsx");
+        umya_spreadsheet::writer::xlsx::write(&book, &input_path)?;
+
+        // run the processing
+        process_excel(&input_path)?;
+
+        let processed = dir.path().join("processed_input.xlsx");
+        assert!(processed.exists(), "processed file should exist");
+
+        // open processed file and check expectations
+        let out = umya_spreadsheet::reader::xlsx::read(&processed)?;
+        // renamed sheet should exist
+        let sheet_out = out
+            .get_sheet_by_name("NMHC监测仪")
+            .ok_or_else(|| anyhow!("Expected renamed sheet not found"))?;
+
+        // check -999 replacements
+        assert_eq!(sheet_out.get_cell("I4").expect("I4").get_value().as_ref(), "-999#a24041");
+        assert_eq!(sheet_out.get_cell("K4").expect("K4").get_value().as_ref(), "-999#a24537");
+        assert_eq!(sheet_out.get_cell("Q4").expect("Q4").get_value().as_ref(), "-999#a24504");
+        assert_eq!(sheet_out.get_cell("AY4").expect("AY4").get_value().as_ref(), "-999#a25501");
+
+        // parentheses removed
+        assert_eq!(sheet_out.get_cell("A3").expect("A3").get_value().as_ref(), "foo");
+
+        // total hydrocarbon replaced
+        assert_eq!(sheet_out.get_cell("B2").expect("B2").get_value().as_ref(), "总烃(ppbC)");
+
+        // restore cwd
+        std::env::set_current_dir(cwd)?;
+        Ok(())
     }
 }
