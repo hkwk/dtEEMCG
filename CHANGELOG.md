@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2 - 2025-12-29
+
+### Fixed
+- Update release workflow to use `actions/upload-artifact@v4` to avoid the deprecated action error.
+- Bump package version to `v0.2.2` and create release tag.
+
 ## v0.2.0 - 2025-12-28
 
 ### Added
