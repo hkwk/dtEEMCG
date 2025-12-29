@@ -50,10 +50,7 @@ fn to_a1(col_1based: u32, row_1based: u32) -> String {
     format!("{}{}", column_number_to_name(col_1based), row_1based)
 }
 
-fn find_target_cells(
-    file_path: &Path,
-    active_sheet_name: &str,
-) -> Result<FindTargetResult> {
+fn find_target_cells(file_path: &Path, active_sheet_name: &str) -> Result<FindTargetResult> {
     let mut workbook = open_workbook_auto(file_path)
         .with_context(|| format!("无法打开文件: {}", file_path.display()))?;
 
