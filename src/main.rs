@@ -12,6 +12,10 @@ struct CellUpdate {
     make_red_fill: bool,
 }
 
+// simplify complex types for clippy
+type CellUpdateMap = HashMap<(u32, u32), CellUpdate>;
+type FindTargetResult = (usize, usize, CellUpdateMap);
+
 fn datatype_to_string(cell: Option<&Data>) -> String {
     match cell {
         None => String::new(),
@@ -50,7 +54,7 @@ fn to_a1(col_1based: u32, row_1based: u32) -> String {
 fn find_target_cells(
     file_path: &Path,
     active_sheet_name: &str,
-) -> Result<(usize, usize, HashMap<(u32, u32), CellUpdate>)> {
+) -> Result<FindTargetResult> {
     let mut workbook = open_workbook_auto(file_path)
         .with_context(|| format!("无法打开文件: {}", file_path.display()))?;
 
