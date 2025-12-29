@@ -1,4 +1,4 @@
-[![CI](https://github.com/hkwk/dtEEMCG/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/hkwk/dtEEMCG/actions)
+[![CI](https://github.com/hkwk/dtEEMCG/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/hkwk/dtEEMCG/actions)
 
 **CI:** GitHub Actions runs `cargo fmt`, `cargo clippy` and `cargo test` on push and PRs. See `.github/workflows/ci.yml`.
 
