@@ -288,16 +288,34 @@ mod tests {
             .ok_or_else(|| anyhow!("Expected renamed sheet not found"))?;
 
         // check -999 replacements
-        assert_eq!(sheet_out.get_cell("I4").expect("I4").get_value().as_ref(), "-999#a24041");
-        assert_eq!(sheet_out.get_cell("K4").expect("K4").get_value().as_ref(), "-999#a24537");
-        assert_eq!(sheet_out.get_cell("Q4").expect("Q4").get_value().as_ref(), "-999#a24504");
-        assert_eq!(sheet_out.get_cell("AY4").expect("AY4").get_value().as_ref(), "-999#a25501");
+        assert_eq!(
+            sheet_out.get_cell("I4").expect("I4").get_value().as_ref(),
+            "-999#a24041",
+        );
+        assert_eq!(
+            sheet_out.get_cell("K4").expect("K4").get_value().as_ref(),
+            "-999#a24537",
+        );
+        assert_eq!(
+            sheet_out.get_cell("Q4").expect("Q4").get_value().as_ref(),
+            "-999#a24504",
+        );
+        assert_eq!(
+            sheet_out.get_cell("AY4").expect("AY4").get_value().as_ref(),
+            "-999#a25501",
+        );
 
         // parentheses removed
-        assert_eq!(sheet_out.get_cell("A3").expect("A3").get_value().as_ref(), "foo");
+        assert_eq!(
+            sheet_out.get_cell("A3").expect("A3").get_value().as_ref(),
+            "foo",
+        );
 
         // total hydrocarbon replaced
-        assert_eq!(sheet_out.get_cell("B2").expect("B2").get_value().as_ref(), "总烃(ppbC)");
+        assert_eq!(
+            sheet_out.get_cell("B2").expect("B2").get_value().as_ref(),
+            "总烃(ppbC)",
+        );
 
         // restore cwd
         std::env::set_current_dir(cwd)?;
