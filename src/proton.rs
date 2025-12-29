@@ -59,7 +59,7 @@ fn process_excel(path: &Path) -> Result<Option<PathBuf>> {
     let sheet_names = workbook.sheet_names();
     let sheet_name = sheet_names
         .get(active_sheet_index)
-        .or_else(|| sheet_names.get(0))
+        .or_else(|| sheet_names.first())
         .cloned()
         .ok_or_else(|| anyhow!("工作簿中没有工作表"))?;
 
