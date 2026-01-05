@@ -16,6 +16,7 @@ anyhow = "1"
 calamine = "0.26"
 regex = "1"
 umya-spreadsheet = "2"
+chrono = "0.4"
 [dev-dependencies]
 tempfile = "3"
 [profile.release]

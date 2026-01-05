@@ -1,1 +1,4 @@
 /target
+/run*
+/*.xlsx
+/*.txt
