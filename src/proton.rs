@@ -1,10 +1,22 @@
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use calamine::{Data, Reader, open_workbook_auto};
 use chrono::NaiveDateTime;
 use regex::Regex;
+
+type DataRow = (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 fn cell_ref(col_1_based: usize, row_1_based: usize) -> String {
     fn col_to_name(mut col: usize) -> String {
@@ -50,7 +62,7 @@ fn processed_output_path(input: &Path) -> PathBuf {
 
 fn parse_time_to_target_format(time_str: &str) -> Result<String> {
     let time_str = time_str.trim();
-    
+
     let parsed = if time_str.contains('T') {
         NaiveDateTime::parse_from_str(time_str, "%Y-%m-%dT%H:%M:%S")
             .or_else(|_| NaiveDateTime::parse_from_str(time_str, "%Y-%m-%dT%H:%M:%S%.f"))
@@ -60,15 +72,15 @@ fn parse_time_to_target_format(time_str: &str) -> Result<String> {
     } else {
         return Err(anyhow!("无法解析时间格式: {}", time_str));
     };
-    
+
     let dt = parsed.with_context(|| format!("时间格式错误: {}", time_str))?;
-    
+
     Ok(dt.format("%Y-%m-%d %H:%M:%S").to_string())
 }
 
 fn load_a2_text() -> Result<String> {
     let config_path = Path::new("proton_config.txt");
-    
+
     if config_path.exists() {
         let content = fs::read_to_string(config_path)
             .with_context(|| format!("无法读取配置文件: {}", config_path.display()))?;
@@ -81,7 +93,7 @@ fn load_a2_text() -> Result<String> {
 fn process_excel(path: &Path) -> Result<PathBuf> {
     let mut workbook =
         open_workbook_auto(path).with_context(|| format!("无法打开文件: {}", path.display()))?;
-    
+
     let sheet_names = workbook.sheet_names();
     let sheet_name = sheet_names
         .first()
@@ -92,7 +104,7 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
         .with_context(|| format!("无法读取工作表: {sheet_name}"))?;
 
     let (height, width) = range.get_size();
-    
+
     if height < 2 {
         return Err(anyhow!("表格行数不足，无法读取数据"));
     }
@@ -100,7 +112,7 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
     let re = Regex::new(r"\((C|RM)\)").expect("valid regex");
 
     let mut column_map: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    
+
     for col in 0..width {
         let header = datatype_to_string(range.get((0, col)));
         if !header.is_empty() {
@@ -108,17 +120,35 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
         }
     }
 
-    let time_col = *column_map.get("时间").ok_or_else(|| anyhow!("找不到'时间'列"))?;
-    let no3_col = *column_map.get("NO₃⁻(μg/m³)").ok_or_else(|| anyhow!("找不到'NO₃⁻(μg/m³)'列"))?;
-    let so4_col = *column_map.get("SO₄²⁻(μg/m³)").ok_or_else(|| anyhow!("找不到'SO₄²⁻(μg/m³)'列"))?;
-    let nh4_col = *column_map.get("NH₄⁺(μg/m³)").ok_or_else(|| anyhow!("找不到'NH₄⁺(μg/m³)'列"))?;
-    let cl_col = *column_map.get("Cl⁻(μg/m³)").ok_or_else(|| anyhow!("找不到'Cl⁻(μg/m³)'列"))?;
-    let k_col = *column_map.get("K⁺(μg/m³)").ok_or_else(|| anyhow!("找不到'K⁺(μg/m³)'列"))?;
-    let na_col = *column_map.get("Na⁺(μg/m³)").ok_or_else(|| anyhow!("找不到'Na⁺(μg/m³)'列"))?;
-    let mg_col = *column_map.get("Mg²⁺(μg/m³)").ok_or_else(|| anyhow!("找不到'Mg²⁺(μg/m³)'列"))?;
-    let ca_col = *column_map.get("Ca²⁺(μg/m³)").ok_or_else(|| anyhow!("找不到'Ca²⁺(μg/m³)'列"))?;
+    let time_col = *column_map
+        .get("时间")
+        .ok_or_else(|| anyhow!("找不到'时间'列"))?;
+    let no3_col = *column_map
+        .get("NO₃⁻(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'NO₃⁻(μg/m³)'列"))?;
+    let so4_col = *column_map
+        .get("SO₄²⁻(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'SO₄²⁻(μg/m³)'列"))?;
+    let nh4_col = *column_map
+        .get("NH₄⁺(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'NH₄⁺(μg/m³)'列"))?;
+    let cl_col = *column_map
+        .get("Cl⁻(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'Cl⁻(μg/m³)'列"))?;
+    let k_col = *column_map
+        .get("K⁺(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'K⁺(μg/m³)'列"))?;
+    let na_col = *column_map
+        .get("Na⁺(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'Na⁺(μg/m³)'列"))?;
+    let mg_col = *column_map
+        .get("Mg²⁺(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'Mg²⁺(μg/m³)'列"))?;
+    let ca_col = *column_map
+        .get("Ca²⁺(μg/m³)")
+        .ok_or_else(|| anyhow!("找不到'Ca²⁺(μg/m³)'列"))?;
 
-    let mut data_rows: Vec<(String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)> = Vec::new();
+    let mut data_rows: Vec<DataRow> = Vec::new();
 
     for row in 1..height {
         let time_value = datatype_to_string(range.get((row, time_col)));
@@ -126,8 +156,8 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
             continue;
         }
 
-        let formatted_time = parse_time_to_target_format(&time_value)
-            .unwrap_or_else(|_| time_value.clone());
+        let formatted_time =
+            parse_time_to_target_format(&time_value).unwrap_or_else(|_| time_value.clone());
 
         let is_valid_number = |value: &str| -> bool {
             let value = value.trim();
@@ -139,11 +169,7 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
 
         let get_value = |col: usize| -> Option<String> {
             let value = datatype_to_string(range.get((row, col)));
-            if value.is_empty() {
-                None
-            } else if re.is_match(&value) {
-                None
-            } else if !is_valid_number(&value) {
+            if value.is_empty() || re.is_match(&value) || !is_valid_number(&value) {
                 None
             } else {
                 Some(value)
@@ -198,32 +224,75 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
         .get_background_color_mut()
         .set_argb("ffff9900");
 
-    sheet.get_cell_mut("A1").set_value("橙色和红色部分请勿改动！！！");
+    sheet
+        .get_cell_mut("A1")
+        .set_value("橙色和红色部分请勿改动！！！");
     sheet.get_cell_mut("A1").set_style(red_style.clone());
 
     let a2_text = load_a2_text()?;
     sheet.get_cell_mut("A2").set_value(a2_text);
     sheet.get_cell_mut("A2").set_style(red_style.clone());
 
-    let row3_headers = ["离子色谱", "SO₂", "HNO₃", "HNO₂", "HCl", "NH₃", "NO₃⁻", "SO₄²⁻", "NH₄⁺", "Cl⁻", "K⁺", "Na⁺", "Mg²⁺", "Ca²⁺", "NO₂⁻"];
+    let row3_headers = [
+        "离子色谱",
+        "SO₂",
+        "HNO₃",
+        "HNO₂",
+        "HCl",
+        "NH₃",
+        "NO₃⁻",
+        "SO₄²⁻",
+        "NH₄⁺",
+        "Cl⁻",
+        "K⁺",
+        "Na⁺",
+        "Mg²⁺",
+        "Ca²⁺",
+        "NO₂⁻",
+    ];
     for (i, header) in row3_headers.iter().enumerate() {
         let addr = cell_ref(i + 1, 3);
         sheet.get_cell_mut(addr.as_str()).set_value(*header);
-        sheet.get_cell_mut(addr.as_str()).set_style(orange_style.clone());
+        sheet
+            .get_cell_mut(addr.as_str())
+            .set_style(orange_style.clone());
     }
 
-    let row4_values = ["4401000010003", "a21026", "a21511", "a21510", "a21024", "a21001", "a06006", "a06005", "a06009", "a06008", "a06013", "a06012", "a06011", "a06010", "a06019"];
+    let row4_values = [
+        "4401000010003",
+        "a21026",
+        "a21511",
+        "a21510",
+        "a21024",
+        "a21001",
+        "a06006",
+        "a06005",
+        "a06009",
+        "a06008",
+        "a06013",
+        "a06012",
+        "a06011",
+        "a06010",
+        "a06019",
+    ];
     for (i, value) in row4_values.iter().enumerate() {
         let addr = cell_ref(i + 1, 4);
         sheet.get_cell_mut(addr.as_str()).set_value(*value);
-        sheet.get_cell_mut(addr.as_str()).set_style(orange_style.clone());
+        sheet
+            .get_cell_mut(addr.as_str())
+            .set_style(orange_style.clone());
     }
 
-    let row5_values = ["时间", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³"];
+    let row5_values = [
+        "时间", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³",
+        "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³",
+    ];
     for (i, value) in row5_values.iter().enumerate() {
         let addr = cell_ref(i + 1, 5);
         sheet.get_cell_mut(addr.as_str()).set_value(*value);
-        sheet.get_cell_mut(addr.as_str()).set_style(orange_style.clone());
+        sheet
+            .get_cell_mut(addr.as_str())
+            .set_style(orange_style.clone());
     }
 
     for (row_idx, (time, no3, so4, nh4, cl, k, na, mg, ca)) in data_rows.iter().enumerate() {
@@ -231,7 +300,9 @@ fn process_excel(path: &Path) -> Result<PathBuf> {
 
         let time_addr = cell_ref(1, row);
         sheet.get_cell_mut(time_addr.as_str()).set_value(time);
-        sheet.get_cell_mut(time_addr.as_str()).set_style(orange_style.clone());
+        sheet
+            .get_cell_mut(time_addr.as_str())
+            .set_style(orange_style.clone());
 
         let values = [no3, so4, nh4, cl, k, na, mg, ca];
         for (col_idx, value) in values.iter().enumerate() {
