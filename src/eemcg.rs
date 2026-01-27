@@ -109,6 +109,13 @@ fn find_target_cells(file_path: &Path, active_sheet_name: &str) -> Result<FindTa
             if value.contains("总烃(ppbv)") {
                 value = value.replace("总烃(ppbv)", "总烃(ppbC)");
             }
+            if value.contains("总烃(ppbvC)") {
+                value = value.replace("总烃(ppbvC)", "总烃(ppbC)");
+            }
+            // 针对NMHC监测仪sheet的D1单元格，精确替换"总烃(ppbvC)"为"总烃(ppbC)"
+            if row_1based == 1 && col_1based == 4 && value == "总烃(ppbvC)" {
+                value = "总烃(ppbC)".to_string();
+            }
             if value.contains("间、对-二甲苯") {
                 value = value.replace("间、对-二甲苯", "间/对-二甲苯");
             }
